@@ -15,31 +15,37 @@ pipeline {
         stage('Checkout') {
             steps {
                 // Pull code from GitHub
-                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/Rick0038/POC.git'
+                git branch: 'master', changelog: false, poll: false, url: 'https://github.com/Rick0038/Experiments.git'
             }
         }
 
         stage('Compile') {
             steps {
                 // Compile the code
-                sh 'cd docker-build-pipeline'
-                sh 'mvn compile'
+                dir('docker-build-pipeline'){
+                    sh 'ls'
+                    sh 'mvn compile'
+                }
             }
         }
 
         stage('Package') {
             steps {
                 // Package the code into a .war file
-                sh 'cd docker-build-pipeline'
-                sh 'mvn package'
+                dir('docker-build-pipeline'){
+                    sh 'ls'
+                    sh 'mvn package'
+                } 
             }
         }
 
         stage('Build Docker image') {
             steps {
                 // Build Docker image
-                sh 'cd docker-build-pipeline'
-                sh 'docker build -t ereshkigal/pocjava-test-docker-image .'
+               dir('docker-build-pipeline'){
+                    sh 'ls'
+                    sh 'docker build -t ereshkigal/pocjava-test-docker-image .'
+                }  
             }
         }
 
