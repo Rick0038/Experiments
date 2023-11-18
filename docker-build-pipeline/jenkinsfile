@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+    tools{
+        maven '3.9.5'
+    }
+
+    stages {
+        stage('Clean') {
+            steps {
+                // Clean the workspace
+                cleanWs()
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                // Pull code from GitHub
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/Rick0038/POC.git'
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                // Compile the code
+                sh 'cd docker-build-pipeline'
+                sh 'mvn compile'
+            }
+        }
+
+        stage('Package') {
+            steps {
+                // Package the code into a .war file
+                sh 'cd docker-build-pipeline'
+                sh 'mvn package'
+            }
+        }
+
+        stage('Build Docker image') {
+            steps {
+                // Build Docker image
+                sh 'cd docker-build-pipeline'
+                sh 'docker build -t ereshkigal/pocjava-test-docker-image .'
+            }
+        }
+
+        stage('Push Docker image') {
+            steps {
+                // Login to Docker Hub
+                echo "Docker login"
+                //sh 'docker login -u your-dockerhub-username -p your-dockerhub-password'
+
+                // Push Docker image
+                echo "Docker push image"
+                //sh 'docker push your-dockerhub-username/your-docker-image-name'
+            }
+        }
+
+        stage('Create Docker container') {
+            steps {
+                // Create a Docker container
+                sh 'docker run -d --name pocjava ereshkigal/pocjava-test-docker-image'
+            }
+        }
+    }
+}
