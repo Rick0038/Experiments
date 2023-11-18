@@ -2,6 +2,11 @@
 # https://hub.docker.com/_/maven
 FROM maven:3.8.6-openjdk-11-slim AS build
 
+RUN curl -fsSLO https://get.docker/builds/Linux/x86_64/docker-17.04.0-ce.tgz \
+  && tar xzvf docker-17.04.0-ce.tgz \
+  && mv docker/docker /usr/local/bin \
+  && rm -r docker docker-17.04.0-ce.tgz
+
 # Set the working directory in the image to /app
 WORKDIR /app
 
