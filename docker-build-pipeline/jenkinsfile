@@ -2,7 +2,8 @@ pipeline {
     agent any
     tools{
         maven '3.9.5'
-//       'org.jenkinsci.plugins.docker.commons.tools.DockerTool' 'docker'
+//      this is only needed of docker plugin is used  
+//      'org.jenkinsci.plugins.docker.commons.tools.DockerTool' 'docker'
     }
 
     stages {
@@ -65,7 +66,7 @@ pipeline {
         stage('Create Docker container') {
             steps {
                 // Create a Docker container
-                sh 'docker run -d --name pocjava ereshkigal/pocjava-test-docker-image'
+                sh 'docker run -d -p 53000:8080 --name pocjava ereshkigal/pocjava-test-docker-image '
             }
         }
     }

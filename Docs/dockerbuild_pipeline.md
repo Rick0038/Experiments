@@ -1,8 +1,37 @@
+**LIMITATIONS**
+
+With this configuration you need either a custom jenkins image with docker preinstalled or a jenkins container with docker plugins installed which will install docker as a tool.
+
+Also as it is essestially using docker inside docker we need to expose the docker socket to the container. At the time of execution it will use the outside (node) docker env to build the image and push it to the target registory and internal registory.
+
+`Dockerfile for custom jenkins image`
+```docker
+FROM jenkins/jenkins
+USER root
+RUN apt-get update && apt-get install -y lsb-release
+RUN apt-get update && apt-get install -y ca-certificates curl gnupg
+RUN install -m 0755 -d /etc/apt/keyrings
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg |  gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+RUN chmod a+r /etc/apt/keyrings/docker.gpg
+RUN echo \
+  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+   tee /etc/apt/sources.list.d/docker.list > /dev/null
+RUN apt-get update
+RUN apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+`Docker command to pass the socket to jenkins`
+```
+docker run -p 8080:8080 -p 50000:50000 -v /var/run/docker.sock:/var/run/docker.sock --restart=on-failure -d jenkins-docker
+```
+
+
+------------------
 This script assumes that you have a Dockerfile in your project root directory that is set up to create a Docker image with your Spring Boot application.
 
-This script will clean the workspace, pull the code from GitHub, compile the code using Maven, package the code into a .war file, build a Docker image, push the Docker image to Docker Hub, and finally create a Docker container from the image.
+This script will clean the workspace, pull the code from GitHub, compile the code using Maven, package the code into a ".war" file, build a Docker image, push the Docker image to Docker Hub, and finally create a Docker container from the image.
 ------------------
-
 
 This Dockerfile starts with a Maven and Java 11 base image, sets the working directory to `/app`, copies the `pom.xml` file to the app directory, downloads all dependencies, copies the rest of the project, packages the application into a .war file, starts a new stage with an OpenJDK 11 base image, copies the .war file from the build stage to the production image, and finally runs the application.
 
@@ -28,3 +57,4 @@ Please replace `your-github-repo`, `your-dockerhub-username`, `your-dockerhub-pa
 
 Please note that this is a basic example and might need to be adjusted based on your specific use case and environment. Always make sure to secure your credentials and consider using Jenkins credentials binding for sensitive data like your Docker Hub password. Also, please ensure that your Jenkins instance has the necessary permissions to access your GitHub repository and Docker Hub.
 -------------------------
+
