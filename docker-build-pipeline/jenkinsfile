@@ -59,7 +59,7 @@ pipeline {
 
                 // Push Docker image
                 echo "Docker push image"
-                //sh 'docker push your-dockerhub-username/your-docker-image-name'
+                //sh 'docker push ereshkigal/pocjava-test-docker-image'
             }
         }
 
