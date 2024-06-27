@@ -26,3 +26,4 @@ os_image         = "ubuntu-22.04-jammy-x86_64"
 volume_size      = 15
 dns_servers     = ["10.33.16.100"]
 floating_ip_pool = "ext_net"
+delay_seconds = 120

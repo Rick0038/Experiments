@@ -104,6 +104,30 @@ variable "floating_ip_pool" {
   type        = string
 }
 
+variable "delay_seconds" {
+  description = "The delay in seconds before creating the worker nodes"
+  default     = 120
+}
+
+# Delay resource for master
+resource "null_resource" "delay_master" {
+  provisioner "local-exec" {
+    command = "sleep ${var.delay_seconds}"
+  }
+  triggers = {
+    instance_id_master = openstack_compute_instance_v2.k3s_master.id
+  }
+}
+
+# Delay resource for workers
+resource "null_resource" "delay_workers" {
+  provisioner "local-exec" {
+    command = "sleep ${var.delay_seconds}"
+  }
+  triggers = {
+    instance_id_workers = join(",", openstack_compute_instance_v2.k3s_workers.*.id)
+  }
+}
 
 # Define the network
 resource "openstack_networking_network_v2" "network" {
@@ -196,7 +220,7 @@ resource "openstack_networking_secgroup_rule_v2" "secgroup_rule_all_outbound" {
 
 # Define the master node
 resource "openstack_compute_instance_v2" "k3s_master" {
-  name          = "k3s-master"
+  name          = "kube-master"
   image_name    = var.os_image
   flavor_name   = var.master_flavor
   key_pair      = openstack_compute_keypair_v2.default.name
@@ -211,24 +235,34 @@ resource "openstack_compute_instance_v2" "k3s_master" {
               apt-get update
               apt-get install -y curl
               echo "Before snap"
-              # snap install helm --classic 
+              snap install helm --classic 
+              
               # Install KubeCTL
-              # curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              # install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-              # kubectl version --client
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+              kubectl version --client
               echo "before K3S"
+              
               # Install K3s with taint if there are worker nodes
               if [ ${var.num_worker_nodes} -gt 0 ]; then
-                curl -sfL https://get.k3s.io | sh -s - --node-taint key=value:NoExecute --disable traefik
+                curl -sfL https://get.k3s.io | sh -s - --node-taint key=value:NoExecute --disable traefik --disable-agent --tls-san 127.0.0.1
               else
                 # Install K3s without taint, allowing the master to schedule pods
-                curl -sfL https://get.k3s.io | sh -s - --disable traefik
+                curl -sfL https://get.k3s.io | sh -s - --disable traefik --disable-agent --tls-san 127.0.0.1
               fi
-              # Save the token into a file
+
+              # Wait and save the token into a file
+              while [ ! -f /var/lib/rancher/k3s/server/node-token ]; do
+                sleep 5
+              done
               mkdir -p /var/lib/rancher/k3s/server/
               echo $(cat /var/lib/rancher/k3s/server/node-token) > /var/lib/rancher/k3s/server/token
+              chmod 777 /var/lib/rancher/k3s/server/token
+              ls -ltr /var/lib/rancher/k3s/server/token
+
               # Mount the volume at /mnt
               mkdir /mnt/data
+              mkfs.ext4 /dev/vdb
               echo '/dev/vdb /mnt/data ext4 defaults 0 0' >> /etc/fstab
               mount -a
               EOT
@@ -252,32 +286,48 @@ resource "openstack_compute_volume_attach_v2" "k3s_master_volume_attach" {
 
 resource "openstack_compute_instance_v2" "k3s_workers" {
   count         = var.num_worker_nodes
-  name          = "k3s-worker-${count.index}"
+  name          = "kubeworker-${count.index}"
   image_name    = var.os_image
   flavor_name   = var.worker_flavor
   key_pair      = openstack_compute_keypair_v2.default.name
-  security_groups = ["default",openstack_networking_secgroup_v2.secgroup.name]
-  depends_on = [openstack_compute_instance_v2.k3s_master]
+  security_groups = ["default", openstack_networking_secgroup_v2.secgroup.name]
+  depends_on    = [
+                    openstack_compute_instance_v2.k3s_master,
+                    null_resource.delay_master
+                  ]
+
   network {
     uuid = openstack_networking_network_v2.network.id
   }
 
-  # This thing does all the magic, a glorified bash script XD
+  # This script installs necessary software and prepares the mount point
   user_data = <<-EOT
               #!/bin/bash
+              echo "hello"
               apt-get update
               apt-get install -y curl
-              # Mount the volume at /mnt
+              
+              # Create a mount point for the attached volume
               mkdir /mnt/data
+              mkfs.ext4 /dev/vdb
               echo '/dev/vdb /mnt/data ext4 defaults 0 0' >> /etc/fstab
               mount -a
+
+              # Save the private key
+              echo '${tls_private_key.ssh.private_key_pem}' > /home/ubuntu/.ssh/id_rsa
+              chmod 600 /home/ubuntu/.ssh/id_rsa
+              while [ -z "$TOKEN" ]; do
+                TOKEN=$(ssh -o StrictHostKeyChecking=no -i /home/ubuntu/.ssh/id_rsa ubuntu@${openstack_compute_instance_v2.k3s_master.network.0.fixed_ip_v4} 'sudo cat /var/lib/rancher/k3s/server/token')
+                sleep 5
+              done
+              curl -sfL https://get.k3s.io | K3S_URL=https://${openstack_compute_instance_v2.k3s_master.network.0.fixed_ip_v4}:6443 K3S_TOKEN=$TOKEN sh -
               EOT
 
-  provisioner "remote-exec" {
-    inline = [
-      "TOKEN=$(ssh -o StrictHostKeyChecking=no -l ubuntu ${openstack_compute_instance_v2.k3s_master.network.0.fixed_ip_v4} 'cat /var/lib/rancher/k3s/server/token')",
-      "curl -sfL https://get.k3s.io | K3S_URL=http://${openstack_compute_instance_v2.k3s_master.network.0.fixed_ip_v4}:6443 K3S_TOKEN=$TOKEN sh -"
-    ]
+  # provisioner "remote-exec" {
+  #   inline = [
+  #     "TOKEN=$(ssh -o StrictHostKeyChecking=no -l ubuntu ${openstack_compute_instance_v2.k3s_master.network.0.fixed_ip_v4} 'cat /var/lib/rancher/k3s/server/token')",
+  #     "curl -sfL https://get.k3s.io | K3S_URL=http://${openstack_compute_instance_v2.k3s_master.network.0.fixed_ip_v4}:6443 K3S_TOKEN=$TOKEN sh -"
+  #   ]
 
     connection {
       type        = "ssh"
@@ -285,7 +335,6 @@ resource "openstack_compute_instance_v2" "k3s_workers" {
       private_key = tls_private_key.ssh.private_key_pem
       host        = self.access_ip_v4
     }
-  }
 
   metadata = {
     instance_role = "worker"
@@ -304,9 +353,17 @@ resource "openstack_compute_volume_attach_v2" "k3s_worker_volume_attach" {
   count       = var.num_worker_nodes
   instance_id = element(openstack_compute_instance_v2.k3s_workers.*.id, count.index)
   volume_id   = element(openstack_blockstorage_volume_v3.k3s_worker_volumes.*.id, count.index)
+  
+  # Ensure attachment only happens after instance and volume creation
+  depends_on = [
+    openstack_compute_instance_v2.k3s_workers,
+    openstack_blockstorage_volume_v3.k3s_worker_volumes
+  ]
 }
 
+
 resource "kubernetes_namespace" "default" {
+  depends_on = [null_resource.delay_workers]
   metadata {
     name = "kube-system"
   }
