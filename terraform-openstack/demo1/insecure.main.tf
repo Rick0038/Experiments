@@ -19,6 +19,10 @@ terraform {
       source  = "hashicorp/tls"
       version = ">= 3.1.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -129,6 +133,7 @@ resource "null_resource" "delay_workers" {
   }
 }
 
+
 # Define the network
 resource "openstack_networking_network_v2" "network" {
   name           = "k3s-network"
@@ -161,6 +166,17 @@ resource "openstack_networking_router_interface_v2" "router_interface" {
   router_id = openstack_networking_router_v2.router.id
   subnet_id = openstack_networking_subnet_v2.subnet.id
 }
+
+# Adding FIP to master ## DEPRICATED 
+resource "openstack_networking_floatingip_v2" "fip" {
+  pool = var.floating_ip_pool
+}
+
+resource "openstack_compute_floatingip_associate_v2" "fip_assoc" {
+  floating_ip = openstack_networking_floatingip_v2.fip.address
+  instance_id = openstack_compute_instance_v2.k3s_master.id
+}
+
 
 # Creating SSH keys
 resource "tls_private_key" "ssh" {
@@ -265,6 +281,11 @@ resource "openstack_compute_instance_v2" "k3s_master" {
               mkfs.ext4 /dev/vdb
               echo '/dev/vdb /mnt/data ext4 defaults 0 0' >> /etc/fstab
               mount -a
+
+              # Adding kubeconfig
+              chmod 644 /etc/rancher/k3s/k3s.yaml
+              echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /etc/profile
+
               EOT
 
   metadata = {
@@ -362,12 +383,20 @@ resource "openstack_compute_volume_attach_v2" "k3s_worker_volume_attach" {
 }
 
 
+data "kubernetes_namespace" "existing" {
+  metadata {
+    name = "kube-system"
+  }
+}
+
 resource "kubernetes_namespace" "default" {
+  count = data.kubernetes_namespace.existing.id != null ? 0 : 1
   depends_on = [null_resource.delay_workers]
   metadata {
     name = "kube-system"
   }
 }
+
 
 resource "kubernetes_deployment" "traefik" {
   metadata {
