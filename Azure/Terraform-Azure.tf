@@ -1,3 +1,9 @@
+#### Author : Sagnik Bhattacharya 
+#### Subject : Cloud comp bonus point 
+#### Question : Create the entire infra using any IaC software which will automatically scale based on the load
+
+
+
 # Initialize the provider and authenticate with Azure
 provider "azurerm" {
   features = {}
