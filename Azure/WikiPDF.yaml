@@ -1,0 +1,66 @@
+trigger:
+- main  # or the branch you want to trigger the pipeline
+
+pool:
+  vmImage: 'ubuntu-22.04'
+
+steps:
+# Install .NET SDK
+- task: UseDotNet@2
+  inputs:
+    packageType: 'sdk'
+    version: '7.x'
+    installationPath: $(Agent.ToolsDirectory)/dotnet
+
+# Try to install WikiPDFExport from NuGet
+- script: |
+    echo "Attempting to install WikiPDFExport tool from NuGet..."
+    dotnet tool install --global AzureDevOps.WikiPDFExport || {
+        echo "Failed to install WikiPDFExport from NuGet, attempting manual installation..."
+        wget https://github.com/MaxMelcher/AzureDevOps.WikiPDFExport/releases/latest/download/AzureDevOps.WikiPDFExport.zip
+        unzip AzureDevOps.WikiPDFExport.zip -d ~/.dotnet/tools
+        chmod +x ~/.dotnet/tools/AzureDevOps.WikiPDFExport
+    }
+
+    # Ensure the global tools path is in the PATH
+    echo "##vso[task.setvariable variable=PATH]$PATH:~/.dotnet/tools"
+  displayName: 'Install or Download WikiPDFExport tool'
+
+# Convert all wiki pages (Markdown files) to PDFs
+- script: |
+    echo "Converting wiki pages to PDFs..."
+    dotnet ~/.dotnet/tools/azuredevops-wikipdfexport --organization $(System.TeamFoundationCollectionUri) --project $(System.TeamProject) --wiki $(Build.Repository.Name) --output $(Build.ArtifactStagingDirectory)
+
+  displayName: 'Convert Wiki to PDFs'
+
+# Zip the generated PDFs
+- script: |
+    echo "Creating the zip file with PDF files..."
+    COMMIT_ID=$(Build.SourceVersion)
+    DATE=$(date +%Y-%m-%d)
+    ZIP_NAME="pdfs_${COMMIT_ID}_${DATE}.zip"
+    cd $(Build.ArtifactStagingDirectory)
+    zip -r $ZIP_NAME . -i "*.pdf"
+    mv $ZIP_NAME $(Build.ArtifactStagingDirectory)/
+
+  displayName: 'Zip PDF files with commit ID and date'
+
+# Upload the zip file to SharePoint
+- script: |
+    echo "Uploading to SharePoint..."
+    SHAREPOINT_URL="https://yourcompany.sharepoint.com/sites/your-site/Documents/Shared%20Documents"
+    UPLOAD_PATH="$SHAREPOINT_URL/$ZIP_NAME"
+    
+    # Replace this with your preferred method to upload the file
+    curl -X PUT -u "$(SHAREPOINT_USER):$(SHAREPOINT_PASSWORD)" --upload-file $(Build.ArtifactStagingDirectory)/$ZIP_NAME $UPLOAD_PATH
+
+  displayName: 'Upload to SharePoint'
+
+# Publish the zip file as a build artifact
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'markdown-pdfs-zip'
+    publishLocation: 'Container'
+
+  displayName: 'Publish zip as Build Artifact'

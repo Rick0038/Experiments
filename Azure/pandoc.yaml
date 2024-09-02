@@ -1,0 +1,60 @@
+trigger:
+- main  # or the branch you want to trigger the pipeline
+
+pool:
+  vmImage: 'ubuntu-22.04'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+    addToPath: true
+
+- script: |
+    echo "Cleaning up the environment..."
+    sudo apt-get update
+    sudo apt-get clean
+    sudo apt-get autoremove -y
+
+    echo "Installing dependencies..."
+    sudo apt-get install -y pandoc texlive texlive-xetex texlive-fonts-recommended texlive-plain-generic zip
+
+  displayName: 'Set up environment and install dependencies'
+
+- script: |
+    echo "Converting Markdown files to PDF..."
+    find . -name "*.md" | while read md_file; do
+        pdf_file="${md_file%.md}.pdf"
+        echo "Converting $md_file to $pdf_file"
+        pandoc "$md_file" -o "$pdf_file" --pdf-engine=xelatex --toc --resource-path=.:$(dirname "$md_file")
+    done
+
+  displayName: 'Convert Markdown to PDF'
+
+- script: |
+    echo "Creating the zip file with PDF files..."
+    COMMIT_ID=$(Build.SourceVersion)
+    DATE=$(date +%Y-%m-%d)
+    ZIP_NAME="pdfs_${COMMIT_ID}_${DATE}.zip"
+    zip -r $ZIP_NAME . -i "*.pdf"
+    mv $ZIP_NAME $(Build.ArtifactStagingDirectory)/
+
+  displayName: 'Zip PDF files with commit ID and date'
+
+- script: |
+    echo "Uploading to SharePoint..."
+    SHAREPOINT_URL="https://yourcompany.sharepoint.com/sites/your-site/Documents/Shared%20Documents"
+    UPLOAD_PATH="$SHAREPOINT_URL/$ZIP_NAME"
+    
+    # Replace this with your preferred method to upload the file
+    curl -X PUT -u "$(SHAREPOINT_USER):$(SHAREPOINT_PASSWORD)" --upload-file $(Build.ArtifactStagingDirectory)/$ZIP_NAME $UPLOAD_PATH
+
+  displayName: 'Upload to SharePoint'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'markdown-pdfs-zip'
+    publishLocation: 'Container'
+
+  displayName: 'Publish zip as Build Artifact'
