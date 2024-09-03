@@ -1,0 +1,40 @@
+# Step 2: Run the WikiPDFExport executable on a specific folder
+- powershell: |
+    $exePath = "$(Build.SourcesDirectory)\WikiPDFExport.exe"
+    $outputDir = "$(Build.SourcesDirectory)\output"  # Save PDFs in a simple directory first
+
+    echo "Running WikiPDFExport on a specific folder to convert Wiki pages to PDFs..."
+    
+    & $exePath --outputDirectory $outputDir
+
+  displayName: 'Convert Wiki to PDFs using WikiPDFExport for Specific Folder'
+  workingDirectory: '$(Build.SourcesDirectory)\path\to\your\folder'  # Target your specific folder
+
+# Step 3: Zip the generated PDFs
+- powershell: |
+    $outputDir = "$(Build.SourcesDirectory)\output"
+    $zipFile = "$(Build.SourcesDirectory)\pdfs_$(Build.SourceVersion)_$(Get-Date -Format 'yyyy-MM-dd').zip"
+
+    echo "Creating a zip file for PDFs..."
+    Compress-Archive -Path "$outputDir\*" -DestinationPath $zipFile  # Zip the entire output directory
+
+  displayName: 'Zip PDF files with commit ID and date'
+
+# Step 4: Move the zip file to the artifact staging directory
+- powershell: |
+    $zipFile = "$(Build.SourcesDirectory)\pdfs_$(Build.SourceVersion)_$(Get-Date -Format 'yyyy-MM-dd').zip"
+    $artifactDir = "$(Build.ArtifactStagingDirectory)"
+    
+    echo "Moving the zip file to the artifact staging directory..."
+    Move-Item -Path $zipFile -Destination $artifactDir
+
+  displayName: 'Move Zip to Artifact Staging Directory'
+
+# Step 5: Publish the zip file as a build artifact
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'wiki-pdfs-zip'
+    publishLocation: 'Container'
+
+  displayName: 'Publish zip as Build Artifact'
