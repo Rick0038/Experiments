@@ -21,6 +21,16 @@ steps:
 
   displayName: 'Set up environment and install dependencies'
 
+# Step 2: Replace `.md` references with `.pdf` in Markdown files
+- script: |
+    echo "Replacing .md references with .pdf in all Markdown files..."
+    find . -name "*.md" | while read md_file; do
+        sed -i 's/\.md/\.pdf/g' "$md_file"
+    done
+
+  displayName: 'Replace .md with .pdf in Markdown files'
+
+
 - script: |
     echo "Converting Markdown files to PDF..."
     find . -name "*.md" | while read md_file; do
@@ -41,6 +51,7 @@ steps:
 
   displayName: 'Zip PDF files with commit ID and date'
 
+
 - script: |
     echo "Uploading to SharePoint..."
     SHAREPOINT_URL="https://yourcompany.sharepoint.com/sites/your-site/Documents/Shared%20Documents"
@@ -50,6 +61,14 @@ steps:
     curl -X PUT -u "$(SHAREPOINT_USER):$(SHAREPOINT_PASSWORD)" --upload-file $(Build.ArtifactStagingDirectory)/$ZIP_NAME $UPLOAD_PATH
 
   displayName: 'Upload to SharePoint'
+
+# Delete all temporary PDF files after zipping
+- script: |
+    echo "Cleaning up temporary PDF files..."
+    find . -name "*.pdf" -type f -delete
+
+  displayName: 'Delete temporary PDF files'
+
 
 - task: PublishBuildArtifacts@1
   inputs:
