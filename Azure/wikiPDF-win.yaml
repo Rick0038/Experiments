@@ -1,0 +1,65 @@
+trigger:
+- main  # or your branch of choice
+
+pool:
+  vmImage: 'windows-latest'
+
+steps:
+# Step 1: Download WikiPDFExport executable
+- powershell: |
+    $downloadUrl = "https://github.com/MaxMelcher/AzureDevOps.WikiPDFExport/releases/download/v1.0.0/AzureDevOps.WikiPDFExport.exe"  # Update with the correct URL
+    $outputPath = "$(Build.SourcesDirectory)\WikiPDFExport.exe"
+    
+    echo "Downloading WikiPDFExport tool..."
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath
+
+    if (Test-Path $outputPath) {
+        echo "Download completed: $outputPath"
+    } else {
+        throw "Failed to download WikiPDFExport tool."
+    }
+
+  displayName: 'Download WikiPDFExport Tool'
+
+# Step 2: Run the WikiPDFExport executable
+- powershell: |
+    $exePath = "$(Build.SourcesDirectory)\WikiPDFExport.exe"
+    $outputDir = "$(Build.ArtifactStagingDirectory)"
+
+    echo "Running WikiPDFExport to convert Wiki pages to PDFs..."
+    & $exePath --organization $(System.TeamFoundationCollectionUri) --project $(System.TeamProject) --wiki $(Build.Repository.Name) --output $outputDir
+
+  displayName: 'Convert Wiki to PDFs using WikiPDFExport'
+
+# Step 3: Zip the generated PDFs
+- powershell: |
+    $outputDir = "$(Build.ArtifactStagingDirectory)"
+    $zipFile = "$(Build.ArtifactStagingDirectory)\pdfs_$(Build.SourceVersion)_$(Get-Date -Format 'yyyy-MM-dd').zip"
+
+    echo "Creating a zip file for PDFs..."
+    Compress-Archive -Path "$outputDir\*.pdf" -DestinationPath $zipFile
+
+  displayName: 'Zip PDF files with commit ID and date'
+
+# Step 4: Upload the zip file to SharePoint
+- powershell: |
+    $zipFilePath = "$(Build.ArtifactStagingDirectory)\pdfs_$(Build.SourceVersion)_$(Get-Date -Format 'yyyy-MM-dd').zip"
+    $sharePointUrl = "https://yourcompany.sharepoint.com/sites/your-site/Documents/Shared%20Documents"
+    
+    echo "Uploading zip file to SharePoint..."
+    
+    # Example using PnP PowerShell for SharePoint upload
+    Install-Module -Name "PnP.PowerShell" -Force -AllowClobber
+    Connect-PnPOnline -Url $sharePointUrl -UseWebLogin
+    Add-PnPFile -Path $zipFilePath -Folder "Shared Documents"
+
+  displayName: 'Upload Zip to SharePoint'
+
+# Step 5: Publish the zip file as a build artifact
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'wiki-pdfs-zip'
+    publishLocation: 'Container'
+
+  displayName: 'Publish zip as Build Artifact'
