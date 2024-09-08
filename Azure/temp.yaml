@@ -1,40 +1,106 @@
-# Step 2: Run the WikiPDFExport executable on a specific folder
-- powershell: |
-    $exePath = "$(Build.SourcesDirectory)\WikiPDFExport.exe"
-    $outputDir = "$(Build.SourcesDirectory)\output"  # Save PDFs in a simple directory first
 
-    echo "Running WikiPDFExport on a specific folder to convert Wiki pages to PDFs..."
-    
-    & $exePath --outputDirectory $outputDir
+trigger:
+  branches:
+    include:
+      - '*'
 
-  displayName: 'Convert Wiki to PDFs using WikiPDFExport for Specific Folder'
-  workingDirectory: '$(Build.SourcesDirectory)\path\to\your\folder'  # Target your specific folder
+pool:
+  vmImage: 'ubuntu-latest'
 
-# Step 3: Zip the generated PDFs
-- powershell: |
-    $outputDir = "$(Build.SourcesDirectory)\output"
-    $zipFile = "$(Build.SourcesDirectory)\pdfs_$(Build.SourceVersion)_$(Get-Date -Format 'yyyy-MM-dd').zip"
+jobs:
+- job: MarkdownLintOnLinux
+  displayName: "Markdown Lint on Linux"
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '16.x'
+    displayName: "Install Node.js"
+  
+  - script: |
+      npm install -g markdownlint-cli
+      lint_output=$(markdownlint "**/*.md" || true)
+      echo "$lint_output"
+      if [ -n "$lint_output" ]; then
+        echo "##vso[task.logissue type=warning]Please fix the following linting errors:"
+        echo "$lint_output"
+        exit 0  # Mark job as successful, but output warning
+      else
+        echo "Markdown linting passed with no errors."
+      fi
+    displayName: "Run Markdownlint on Linux"
+  
+- job: MarkdownLintOnWindows
+  displayName: "Markdown Lint on Windows"
+  pool:
+    vmImage: 'windows-latest'
+  steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '16.x'
+    displayName: "Install Node.js"
 
-    echo "Creating a zip file for PDFs..."
-    Compress-Archive -Path "$outputDir\*" -DestinationPath $zipFile  # Zip the entire output directory
+  - script: |
+      npm install -g markdownlint-cli
+      lint_output=$(markdownlint "**/*.md" || exit 0)
+      echo "$lint_output"
+      if ($lint_output) {
+        echo "##vso[task.logissue type=warning]Please fix the following linting errors:"
+        echo "$lint_output"
+      } else {
+        echo "Markdown linting passed with no errors."
+      }
+    displayName: "Run Markdownlint on Windows"
 
-  displayName: 'Zip PDF files with commit ID and date'
+---
 
-# Step 4: Move the zip file to the artifact staging directory
-- powershell: |
-    $zipFile = "$(Build.SourcesDirectory)\pdfs_$(Build.SourceVersion)_$(Get-Date -Format 'yyyy-MM-dd').zip"
-    $artifactDir = "$(Build.ArtifactStagingDirectory)"
-    
-    echo "Moving the zip file to the artifact staging directory..."
-    Move-Item -Path $zipFile -Destination $artifactDir
+trigger:
+  branches:
+    include:
+      - '*'
 
-  displayName: 'Move Zip to Artifact Staging Directory'
+pool:
+  vmImage: 'ubuntu-latest'
 
-# Step 5: Publish the zip file as a build artifact
-- task: PublishBuildArtifacts@1
-  inputs:
-    pathToPublish: '$(Build.ArtifactStagingDirectory)'
-    artifactName: 'wiki-pdfs-zip'
-    publishLocation: 'Container'
+jobs:
+- job: AnsibleLintOnLinux
+  displayName: "Ansible Lint on Linux"
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+    displayName: "Install Python"
 
-  displayName: 'Publish zip as Build Artifact'
+  - script: |
+      python -m pip install --upgrade pip
+      pip install ansible ansible-lint
+    displayName: "Install Ansible and ansible-lint"
+
+  - script: |
+      lint_output=$(ansible-lint **/*.yml || true)
+      echo "$lint_output"
+      if [ -n "$lint_output" ]; then
+        echo "##vso[task.logissue type=warning]Please fix the following ansible-lint issues:"
+        echo "$lint_output"
+        exit 0  # Produce warning but don't fail the job
+      else
+        echo "Ansible linting passed with no errors."
+      fi
+    displayName: "Run ansible-lint on Linux"
+
+# New Unrelated Job (If needed, can be the same from the markdown pipeline)
+- job: UnrelatedJob
+  displayName: "Unrelated Task after Ansible Linting"
+  dependsOn:
+    - AnsibleLintOnLinux
+  condition: succeededOrFailed()  # Run even if ansible linting produces warnings
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - script: |
+      echo "This is an unrelated job that runs after the Ansible linting."
+    displayName: "Run Unrelated Task"
+
