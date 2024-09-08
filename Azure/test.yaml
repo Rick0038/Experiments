@@ -1,0 +1,69 @@
+---
+- name: A problematic Ansible playbook
+  hosts: localhost
+  tasks:
+    - name: Install nginx without `become`
+      apt:
+        name: nginx
+        state: present
+
+    - name: Enable nginx service without state
+      service:
+        name: nginx
+
+    - name: Task without a name
+      command: echo "Hello World"
+
+---
+- name: A correct Ansible playbook
+  hosts: localhost
+  tasks:
+    - name: Ensure Nginx is installed
+      apt:
+        name: nginx
+        state: present
+      become: yes
+
+    - name: Start Nginx service
+      service:
+        name: nginx
+        state: started
+
+---
+### Incorrect Markdown File (Contains linting issues)
+
+#### `incorrect.md`
+
+```markdown
+#This heading has no space after the hash
+
+There  are  multiple spaces between words here.
+
+##Subheading without space
+
+-  List item with double space before text
+-Another list item with no space after hyphen
+
+This is a sentence with a [bad link](example.com) without the correct protocol.
+
+Here's a code block example without backticks
+    echo "This is an incorrect code block"
+
+#Another heading with no space
+
+---
+# This is a correct Markdown file
+
+This file follows all markdown linting rules.
+
+## Subheading
+
+This is a well-formatted paragraph under the subheading.
+
+- This is a proper list item
+- Another well-formatted list item
+
+### Code block example
+
+```bash
+echo "This is a properly formatted code block"
