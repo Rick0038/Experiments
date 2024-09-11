@@ -2,19 +2,73 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Pandoc Markdown Lint",
+      "label": "Install Node.js (Linux/macOS)",
       "type": "shell",
-      "command": "find . -name \"*.md\" -exec pandoc --from markdown --to html5 {} -o /dev/null \\;",
+      "command": "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash && source ~/.nvm/nvm.sh && nvm install node",
       "problemMatcher": [],
       "presentation": {
-        "reveal": "always",
+        "echo": true,
+        "reveal": "silent",
         "panel": "shared",
-        "clear": false
+        "clear": true
       },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "condition": "!process.env.NODE",  // Only install if Node.js is not installed
       "group": {
         "kind": "build",
         "isDefault": true
       }
+    },
+    {
+      "label": "Install Node.js (Windows)",
+      "type": "shell",
+      "command": "choco install nodejs",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "condition": "!process.env.NODE",  // Only install if Node.js is not installed
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Install markdownlint-cli",
+      "type": "shell",
+      "command": "npm install -g markdownlint-cli",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "dependsOn": ["Install Node.js (Linux/macOS)", "Install Node.js (Windows)"]
+    },
+    {
+      "label": "Lint Markdown Files",
+      "type": "shell",
+      "command": "markdownlint '**/*.md'",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      },
+      "dependsOn": "Install markdownlint-cli"
     }
   ]
 }
