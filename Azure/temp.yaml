@@ -1,106 +1,70 @@
-
-trigger:
-  branches:
-    include:
-      - '*'
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-jobs:
-- job: MarkdownLintOnLinux
-  displayName: "Markdown Lint on Linux"
-  pool:
-    vmImage: 'ubuntu-latest'
-  steps:
-  - task: NodeTool@0
-    inputs:
-      versionSpec: '16.x'
-    displayName: "Install Node.js"
-  
-  - script: |
-      npm install -g markdownlint-cli
-      lint_output=$(markdownlint "**/*.md" || true)
-      echo "$lint_output"
-      if [ -n "$lint_output" ]; then
-        echo "##vso[task.logissue type=warning]Please fix the following linting errors:"
-        echo "$lint_output"
-        exit 0  # Mark job as successful, but output warning
-      else
-        echo "Markdown linting passed with no errors."
-      fi
-    displayName: "Run Markdownlint on Linux"
-  
-- job: MarkdownLintOnWindows
-  displayName: "Markdown Lint on Windows"
-  pool:
-    vmImage: 'windows-latest'
-  steps:
-  - task: NodeTool@0
-    inputs:
-      versionSpec: '16.x'
-    displayName: "Install Node.js"
-
-  - script: |
-      npm install -g markdownlint-cli
-      lint_output=$(markdownlint "**/*.md" || exit 0)
-      echo "$lint_output"
-      if ($lint_output) {
-        echo "##vso[task.logissue type=warning]Please fix the following linting errors:"
-        echo "$lint_output"
-      } else {
-        echo "Markdown linting passed with no errors."
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Markdownlint Extension",
+      "type": "shell",
+      "command": "code --install-extension DavidAnson.vscode-markdownlint",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared",
+        "clear": false
+      },
+      "runOptions": {
+        "runOn": "folderOpen"  // Installs the extension when the folder is opened
       }
-    displayName: "Run Markdownlint on Windows"
+    },
+    {
+      "label": "Lint Markdown Files",
+      "type": "shell",
+      "command": "markdownlint **/*.md",  // Use markdownlint to lint all .md files
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": false
+      },
+      "dependsOn": "Install Markdownlint Extension",  // Ensure extension is installed before linting
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
 
----
 
-trigger:
-  branches:
-    include:
-      - '*'
 
-pool:
-  vmImage: 'ubuntu-latest'
 
-jobs:
-- job: AnsibleLintOnLinux
-  displayName: "Ansible Lint on Linux"
-  pool:
-    vmImage: 'ubuntu-latest'
-  steps:
-  - task: UsePythonVersion@0
-    inputs:
-      versionSpec: '3.x'
-    displayName: "Install Python"
 
-  - script: |
-      python -m pip install --upgrade pip
-      pip install ansible ansible-lint
-    displayName: "Install Ansible and ansible-lint"
 
-  - script: |
-      lint_output=$(ansible-lint **/*.yml || true)
-      echo "$lint_output"
-      if [ -n "$lint_output" ]; then
-        echo "##vso[task.logissue type=warning]Please fix the following ansible-lint issues:"
-        echo "$lint_output"
-        exit 0  # Produce warning but don't fail the job
-      else
-        echo "Ansible linting passed with no errors."
-      fi
-    displayName: "Run ansible-lint on Linux"
 
-# New Unrelated Job (If needed, can be the same from the markdown pipeline)
-- job: UnrelatedJob
-  displayName: "Unrelated Task after Ansible Linting"
-  dependsOn:
-    - AnsibleLintOnLinux
-  condition: succeededOrFailed()  # Run even if ansible linting produces warnings
-  pool:
-    vmImage: 'ubuntu-latest'
-  steps:
-  - script: |
-      echo "This is an unrelated job that runs after the Ansible linting."
-    displayName: "Run Unrelated Task"
-
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Markdownlint Extension",
+      "type": "shell",
+      "command": "code --install-extension DavidAnson.vscode-markdownlint",
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Lint Markdown Files",
+      "type": "shell",
+      "command": "code . --goto $(find . -name '*.md' | tr '\n' ' ')",  // Opens all .md files in the repository
+      "problemMatcher": [],
+      "dependsOn": "Install Markdownlint Extension",  // Runs after the extension is installed
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    }
+  ]
+}
