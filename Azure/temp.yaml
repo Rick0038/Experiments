@@ -2,68 +2,18 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Install Markdownlint Extension",
+      "label": "Pandoc Markdown Lint",
       "type": "shell",
-      "command": "code --install-extension DavidAnson.vscode-markdownlint",
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "panel": "shared",
-        "clear": false
-      },
-      "runOptions": {
-        "runOn": "folderOpen"  // Installs the extension when the folder is opened
-      }
-    },
-    {
-      "label": "Lint Markdown Files",
-      "type": "shell",
-      "command": "markdownlint **/*.md",  // Use markdownlint to lint all .md files
+      "command": "find . -name \"*.md\" -exec pandoc --from markdown --to html5 {} -o /dev/null \\;",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "shared",
         "clear": false
       },
-      "dependsOn": "Install Markdownlint Extension",  // Ensure extension is installed before linting
       "group": {
         "kind": "build",
         "isDefault": true
-      }
-    }
-  ]
-}
-
-
-
-
-
-
-
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Install Markdownlint Extension",
-      "type": "shell",
-      "command": "code --install-extension DavidAnson.vscode-markdownlint",
-      "problemMatcher": [],
-      "runOptions": {
-        "runOn": "folderOpen"
-      }
-    },
-    {
-      "label": "Lint Markdown Files",
-      "type": "shell",
-      "command": "code . --goto $(find . -name '*.md' | tr '\n' ' ')",  // Opens all .md files in the repository
-      "problemMatcher": [],
-      "dependsOn": "Install Markdownlint Extension",  // Runs after the extension is installed
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared"
       }
     }
   ]
