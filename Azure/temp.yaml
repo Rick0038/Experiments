@@ -1,74 +1,21 @@
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Install Node.js (Linux/macOS)",
-      "type": "shell",
-      "command": "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash && source ~/.nvm/nvm.sh && nvm install node",
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "silent",
-        "panel": "shared",
-        "clear": true
-      },
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
-      "condition": "!process.env.NODE",  // Only install if Node.js is not installed
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
-    },
-    {
-      "label": "Install Node.js (Windows)",
-      "type": "shell",
-      "command": "choco install nodejs",
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "silent",
-        "panel": "shared",
-        "clear": true
-      },
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
-      "condition": "!process.env.NODE",  // Only install if Node.js is not installed
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
-    },
-    {
-      "label": "Install markdownlint-cli",
-      "type": "shell",
-      "command": "npm install -g markdownlint-cli",
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "silent",
-        "panel": "shared",
-        "clear": true
-      },
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
-      "dependsOn": ["Install Node.js (Linux/macOS)", "Install Node.js (Windows)"]
-    },
-    {
-      "label": "Lint Markdown Files",
-      "type": "shell",
-      "command": "markdownlint '**/*.md'",
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "silent",
-        "panel": "shared",
-        "clear": true
-      },
-      "dependsOn": "Install markdownlint-cli"
-    }
-  ]
-}
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Other configurations -->
+
+  <Target Name="RunLinters" AfterTargets="Build">
+    <!-- Run Markdown Lint on all Markdown files in the solution -->
+    <Exec Command="markdownlint &quot;$(SolutionDir)&quot;" ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="MarkdownLintExitCode" />
+    </Exec>
+
+    <!-- Run Ansible Lint on all Ansible YAML files in the solution -->
+    <Exec Command="ansible-lint &quot;$(SolutionDir)\**\*.yml&quot;" ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="AnsibleLintExitCode" />
+    </Exec>
+
+    <!-- Optional: Fail the build if linting fails -->
+    <Error Condition="'$(MarkdownLintExitCode)' != '0'" Text="Markdown Linting failed." />
+    <Error Condition="'$(AnsibleLintExitCode)' != '0'" Text="Ansible Linting failed." />
+  </Target>
+
+</Project>
