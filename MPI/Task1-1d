@@ -1,0 +1,97 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define N 4  // Dimension of the square matrix (N x N)
+
+// Utility function to print a matrix
+void printMatrix(double* mat, int n, const char* name) {
+    printf("Matrix %s:\n", name);
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            printf("%f ", mat[i*n + j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
+int main(int argc, char* argv[]) {
+    int rank, size;
+
+    // Initialize MPI
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (N % size != 0) {
+        if (rank == 0) {
+            printf("Error: Matrix size N must be divisible by the number of processes.\n");
+        }
+        MPI_Finalize();
+        exit(1);
+    }
+
+    int rows_per_proc = N / size;  // Number of rows each process will handle
+
+    // Allocate memory for matrix A, B, and C
+    double *A = NULL, *B = NULL, *C = NULL;
+    double *A_local = (double*)malloc(rows_per_proc * N * sizeof(double)); // Portion of A for each process
+    double *C_local = (double*)malloc(rows_per_proc * N * sizeof(double)); // Portion of C for each process
+    double *B_local = (double*)malloc(N * N * sizeof(double)); // Each process gets the entire B matrix
+
+    if (rank == 0) {
+        // Allocate and initialize matrices A and B on rank 0
+        A = (double*)malloc(N * N * sizeof(double));
+        B = (double*)malloc(N * N * sizeof(double));
+        C = (double*)malloc(N * N * sizeof(double));
+
+        // Initialize matrix A and B with some values (for example, A[i,j] = i*N + j + 1)
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                A[i * N + j] = i * N + j + 1; // Example: 1, 2, 3,... N
+                B[i * N + j] = i * N + j + 1; // Same for B
+            }
+        }
+
+        // Print matrices A and B
+        printMatrix(A, N, "A");
+        printMatrix(B, N, "B");
+    }
+
+    // Scatter rows of A to all processes
+    MPI_Scatter(A, rows_per_proc * N, MPI_DOUBLE, A_local, rows_per_proc * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Broadcast the entire matrix B to all processes
+    MPI_Bcast(B_local, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Each process performs its portion of matrix multiplication
+    for (int i = 0; i < rows_per_proc; i++) {
+        for (int j = 0; j < N; j++) {
+            C_local[i * N + j] = 0.0;  // Initialize to 0
+            for (int k = 0; k < N; k++) {
+                C_local[i * N + j] += A_local[i * N + k] * B_local[k * N + j];
+            }
+        }
+    }
+
+    // Gather the resulting matrix C from all processes
+    MPI_Gather(C_local, rows_per_proc * N, MPI_DOUBLE, C, rows_per_proc * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Print the result matrix C on rank 0
+    if (rank == 0) {
+        printMatrix(C, N, "C");
+        free(A);
+        free(B);
+        free(C);
+    }
+
+    // Clean up
+    free(A_local);
+    free(B_local);
+    free(C_local);
+
+    // Finalize MPI
+    MPI_Finalize();
+    return 0;
+}
